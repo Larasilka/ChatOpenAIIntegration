@@ -51,16 +51,33 @@ export const Personalities: React.FC = () => {
   };
 
   const handleCreate = async () => {
-    if (!formData.name.trim() || !formData.prompt.trim()) return;
+    if (!formData.name.trim() || !formData.prompt.trim()) {
+      setFileError('Name and prompt are required');
+      return;
+    }
     
     try {
       setIsProcessingFile(true);
+      setFileError(null);
+      
+      console.log('Creating personality with data:', {
+        name: formData.name.trim(),
+        prompt: formData.prompt.trim(),
+        has_memory: formData.has_memory
+      });
       
       // Create personality first
       const newPersonality = await createPersonality(formData.name.trim(), formData.prompt.trim(), formData.has_memory);
       
+      if (!newPersonality) {
+        throw new Error('Failed to create personality - no data returned');
+      }
+      
+      console.log('Personality created successfully:', newPersonality);
+      
       // If file was selected and personality was created successfully, upload file
-      if (newPersonality && formData.selectedFile) {
+      if (formData.selectedFile) {
+        console.log('Uploading file:', formData.selectedFile.name);
         await uploadPersonalityFile(newPersonality.id, formData.selectedFile);
         
         // Update personality with file instruction if provided
@@ -71,7 +88,7 @@ export const Personalities: React.FC = () => {
         }
       }
       
-      // Reset form
+      // Reset form only on success
       setFormData({ name: '', prompt: '', has_memory: true, file_instruction: '', selectedFile: null });
       setFileError(null);
       setShowCreateForm(false);
@@ -80,7 +97,10 @@ export const Personalities: React.FC = () => {
       }
       
     } catch (error) {
-      setFileError(error instanceof Error ? error.message : 'Failed to create personality');
+      console.error('Error in handleCreate:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create personality';
+      setFileError(errorMessage);
+      // Don't close the form on error - let user see the error and retry
     } finally {
       setIsProcessingFile(false);
     }
@@ -269,6 +289,15 @@ export const Personalities: React.FC = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Error Display */}
+                {fileError && (
+                  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                    <p className="text-sm text-red-700 dark:text-red-300">
+                      <strong>Error:</strong> {fileError}
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-center gap-2">
                   <button

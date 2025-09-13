@@ -16,7 +16,8 @@ export const ChatArea: React.FC = () => {
     settings,
     currentChatId,
     togglePersonalities,
-    updatePersonality
+    updatePersonality,
+    error
   } = useStore();
 
   const [input, setInput] = useState('');
@@ -102,6 +103,28 @@ export const ChatArea: React.FC = () => {
     );
   }
 
+  if (!activePersonality) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-white dark:bg-gray-800">
+        <div className="text-center max-w-md">
+          <User className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
+            No Active Personality
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            Please create and activate a personality to start chatting.
+          </p>
+          <button
+            onClick={togglePersonalities}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            Manage Personalities
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col bg-white dark:bg-gray-800">
       {/* Header */}
@@ -152,6 +175,33 @@ export const ChatArea: React.FC = () => {
         </div>
       </div>
 
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 p-4 mx-4">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => useStore.setState({ error: null })}
+                className="text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-200"
+              >
+                <span className="sr-only">Dismiss</span>
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
         {messages.length === 0 ? (
@@ -189,11 +239,12 @@ export const ChatArea: React.FC = () => {
                       <ReactMarkdown
                         remarkPlugins={[remarkGfm]}
                         components={{
-                          code({ node, inline, className, children, ...props }) {
+                          code({ node, className, children, ...props }: any) {
                             const match = /language-(\w+)/.exec(className || '');
+                            const inline = !match;
                             return !inline && match ? (
                               <SyntaxHighlighter
-                                style={settings?.theme === 'dark' ? oneDark : oneLight}
+                                style={settings?.theme === 'dark' ? (oneDark as any) : (oneLight as any)}
                                 language={match[1]}
                                 PreTag="div"
                                 className="rounded-lg !mt-2 !mb-2"

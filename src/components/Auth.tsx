@@ -25,28 +25,45 @@ export const Auth: React.FC = () => {
         });
         if (error) throw error;
       } else if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
         });
         if (error) throw error;
+        
+        // Show success message for signup
+        if (data.user && !data.session) {
+          setMessage('Регистрация успешна! Проверьте email для подтверждения.');
+        } else if (data.session) {
+          setMessage('Регистрация и вход выполнены успешно!');
+        }
       } else if (mode === 'reset') {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: 'https://chatgpt-clone-with-o-9p2q.bolt.host/',
+          redirectTo: `${window.location.origin}/`,
         });
         if (error) throw error;
-        setMessage('Password reset link has been sent to your email');
+        setMessage('Ссылка для сброса пароля отправлена на ваш email');
       }
     } catch (error: any) {
       if (error.message?.includes('User already registered') || error.code === 'user_already_exists') {
-        setError('This email is already registered. Please try logging in instead.');
+        setError('Этот email уже зарегистрирован. Попробуйте войти в систему.');
         // Automatically switch to login mode after a short delay
         setTimeout(() => {
           setMode('login');
           setError('');
         }, 2000);
+      } else if (error.message?.includes('Invalid login credentials')) {
+        setError('Неверные данные для входа. Проверьте email и пароль.');
+      } else if (error.message?.includes('Email not confirmed')) {
+        setError('Подтвердите email перед входом. Проверьте почту.');
+      } else if (error.message?.includes('Password should be at least')) {
+        setError('Пароль должен быть не менее 6 символов.');
+      } else if (error.message?.includes('Unable to validate email address')) {
+        setError('Неверный формат email.');
       } else {
-        setError(error.message);
+        // Log the full error for debugging
+        console.error('Auth error:', error);
+        setError(error.message || 'Произошла ошибка. Попробуйте снова.');
       }
     } finally {
       setLoading(false);
@@ -61,14 +78,14 @@ export const Auth: React.FC = () => {
             <LogIn className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-            {mode === 'login' ? 'Welcome Back' : mode === 'signup' ? 'Create Account' : 'Reset Password'}
+            {mode === 'login' ? 'Добро пожаловать обратно' : mode === 'signup' ? 'Создание аккаунта' : 'Сброс пароля'}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             {mode === 'login' 
-              ? 'Sign in to continue to your chats' 
+              ? 'Войдите, чтобы продолжить работу с чатами' 
               : mode === 'signup' 
-              ? 'Sign up to start chatting with AI'
-              : 'Enter your email to receive a password reset link'
+              ? 'Зарегистрируйтесь, чтобы начать общение с AI'
+              : 'Введите email для получения ссылки сброса пароля'
             }
           </p>
         </div>
@@ -81,7 +98,7 @@ export const Auth: React.FC = () => {
               className="flex items-center gap-2 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 mb-4"
             >
               <ArrowLeft className="w-4 h-4" />
-              Back to sign in
+              Назад ко входу
             </button>
           )}
 
@@ -96,7 +113,7 @@ export const Auth: React.FC = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Enter your email"
+                placeholder="Введите ваш email"
                 required
               />
             </div>
@@ -105,7 +122,7 @@ export const Auth: React.FC = () => {
           {mode !== 'reset' && (
             <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Password
+              Пароль
             </label>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -114,7 +131,7 @@ export const Auth: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="Enter your password"
+                placeholder="Введите ваш пароль"
                 required
               />
               <button
@@ -147,12 +164,12 @@ export const Auth: React.FC = () => {
             {loading ? (
               <div className="flex items-center justify-center">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                {mode === 'login' ? 'Signing In...' : mode === 'signup' ? 'Creating Account...' : 'Sending Reset Link...'}
+                {mode === 'login' ? 'Вход...' : mode === 'signup' ? 'Создание аккаунта...' : 'Отправка ссылки...'}
               </div>
             ) : (
               <div className="flex items-center justify-center">
                 {mode === 'login' ? <LogIn className="w-5 h-5 mr-2" /> : mode === 'signup' ? <UserPlus className="w-5 h-5 mr-2" /> : <Mail className="w-5 h-5 mr-2" />}
-                {mode === 'login' ? 'Sign In' : mode === 'signup' ? 'Create Account' : 'Send Reset Link'}
+                {mode === 'login' ? 'Войти' : mode === 'signup' ? 'Создать аккаунт' : 'Отправить ссылку'}
               </div>
             )}
           </button>
@@ -165,13 +182,13 @@ export const Auth: React.FC = () => {
                 onClick={() => setMode('reset')}
                 className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium block w-full"
               >
-                Forgot your password?
+                Забыли пароль?
               </button>
               <button
                 onClick={() => setMode('signup')}
                 className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
               >
-                Don't have an account? Sign up
+                Нет аккаунта? Зарегистрироваться
               </button>
             </>
           )}
@@ -181,7 +198,7 @@ export const Auth: React.FC = () => {
               onClick={() => setMode('login')}
               className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium"
             >
-              Already have an account? Sign in
+              Уже есть аккаунт? Войти
             </button>
           )}
         </div>

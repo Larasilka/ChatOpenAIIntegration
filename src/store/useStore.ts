@@ -10,7 +10,9 @@ import { encryption } from '../lib/encryption';
 type Chat = Database['public']['Tables']['chats']['Row'] & {
   token_usage?: TokenUsage;
 };
-type Message = Database['public']['Tables']['messages']['Row'];
+type Message = Database['public']['Tables']['messages']['Row'] & {
+  token_usage?: TokenUsage;
+};
 type UserSettings = Database['public']['Tables']['user_settings']['Row'];
 type Personality = Database['public']['Tables']['personalities']['Row'];
 
@@ -67,6 +69,7 @@ interface AppState {
   uploadPersonalityFile: (personalityId: string, file: File) => Promise<PersonalityFile>;
   deletePersonalityFile: (personalityId: string, fileId: string) => Promise<void>;
   setIsGenerating: (generating: boolean) => void;
+  clearError: () => void;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -189,9 +192,13 @@ export const useStore = create<AppState>((set, get) => ({
       return;
     }
     
+    // Clear any existing errors
+    set({ error: null });
+    
     const { user, currentChatId, settings, openaiService } = get();
     if (!user || !settings?.openai_api_key) {
       console.error('Missing user or API key');
+      set({ error: 'Missing user authentication or API key. Please check your settings.' });
       return;
     }
 
@@ -199,6 +206,7 @@ export const useStore = create<AppState>((set, get) => ({
     const { activePersonality } = get();
     if (!activePersonality?.openai_assistant_id) {
       console.error('No active personality with Assistant ID found');
+      set({ error: 'Please create and activate a personality in the Personality settings before chatting.' });
       return;
     }
 
@@ -381,6 +389,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     } catch (error) {
       console.error('Error with Assistants API:', error);
+      set({ error: `Chat error: ${error instanceof Error ? error.message : 'Unknown error'}` });
       // Remove the empty assistant message on error if it exists
       set(state => ({
         messages: state.messages.filter(msg => 
@@ -462,6 +471,25 @@ export const useStore = create<AppState>((set, get) => ({
         get().assistantService.setApiKey(newSettings.openai_api_key);
         get().vectorStoreService.setApiKey(newSettings.openai_api_key);
         get().integrationService.setApiKey(newSettings.openai_api_key);
+        
+        // Auto-create default personality if none exist and API key is new
+        const { personalities } = get();
+        if (personalities.length === 0) {
+          console.log('Creating default personality for new user...');
+          await get().createPersonality(
+            'Default Assistant',
+            'You are a helpful, knowledgeable, and friendly AI assistant. Respond in a clear, concise, and helpful manner. Adapt your communication style to be professional yet approachable.',
+            true
+          ).then((personality) => {
+            if (personality) {
+              // Activate the newly created personality
+              get().setActivePersonality(personality.id);
+              console.log('Default personality created and activated');
+            }
+          }).catch((error) => {
+            console.error('Failed to create default personality:', error);
+          });
+        }
       }
     }
   },
@@ -472,7 +500,12 @@ export const useStore = create<AppState>((set, get) => ({
 
   loadPersonalities: async () => {
     const { user } = get();
-    if (!user) return;
+    if (!user) {
+      console.log('No user found, cannot load personalities');
+      return;
+    }
+
+    console.log('Loading personalities for user:', user.id);
 
     const { data, error } = await supabase
       .from('personalities')
@@ -480,9 +513,22 @@ export const useStore = create<AppState>((set, get) => ({
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
 
-    if (!error && data) {
+    if (error) {
+      console.error('Error loading personalities:', error);
+      console.error('Error details:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      return;
+    }
+
+    if (data) {
+      console.log('Loaded personalities:', data);
       set({ personalities: data });
       const active = data.find(p => p.is_active);
+      console.log('Active personality:', active);
       set({ activePersonality: active || null });
     }
   },
@@ -524,11 +570,24 @@ export const useStore = create<AppState>((set, get) => ({
         .select()
         .single();
 
-      if (!error && data) {
+      if (error) {
+        console.error('Supabase error creating personality:', error);
+        console.error('Error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        throw new Error(`Failed to create personality: ${error.message}`);
+      }
+
+      if (data) {
+        console.log('Personality created successfully:', data);
         set(state => ({ personalities: [data, ...state.personalities] }));
         return data;
       }
-      return null;
+      
+      throw new Error('No data returned from database');
     } catch (error) {
       console.error('Error creating personality:', error);
       return null;
@@ -750,5 +809,7 @@ export const useStore = create<AppState>((set, get) => ({
   },
 
 
-  setIsGenerating: (generating) => set({ isGenerating: generating })
+  setIsGenerating: (generating) => set({ isGenerating: generating }),
+
+  clearError: () => set({ error: null })
 }));
